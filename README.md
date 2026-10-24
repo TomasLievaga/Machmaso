@@ -40,7 +40,7 @@ after changing it. Without these values, or if the request fails, the app falls
 back to the built-in samples from `createSamples()` and shows a "demo data"
 notice.
 
-- Schema: `supabase/migrations/20261024120000_create_listings.sql` creates the
+- Schema: `supabase/migrations/20261024161215_create_listings.sql` creates the
   table with check constraints matching `lib/data.ts` and enables Row Level
   Security with a single policy that lets anyone `SELECT`. There are no insert,
   update or delete policies yet, because there is no login.
