@@ -6,7 +6,7 @@
 - Communicate with Codex in English. Write code, comments, commit messages, and shared documentation in English.
 - Inspect existing code and instructions before making changes. Keep changes focused on the requested task and preserve unrelated work.
 - The existing application is a Next.js App Router prototype with TypeScript, Tailwind CSS, Leaflet/OpenStreetMap, marker clustering, Lucide icons, and EN/DE controls. The interface is currently monochrome.
-- Listings load server-side from Supabase with built-in fictional samples as a fallback. Posting actions and sending requests remain local React-memory demos that reset on refresh; authentication, database writes, real messaging, and payments are not implemented. The Python files are historical test scaffolding, not the application architecture.
+- Listings load server-side from Supabase with built-in fictional samples as a fallback. Supabase email/password auth (via `@supabase/ssr`) lets signed-in users insert listings they own through a Server Action; ownership comes from the verified session and RLS. Sending requests remains a local React-memory demo; real messaging and payments are not implemented. The Python files are historical test scaffolding, not the application architecture.
 - Never commit credentials or real `.env` files. Use placeholder values in `.env.example` when needed.
 - Keep setup instructions current when development commands change.
 

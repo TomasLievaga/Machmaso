@@ -1,6 +1,7 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import { ArrowUpRight, MapPin } from "lucide-react";
+import { createListing } from "@/app/actions";
 import {
   categories,
   intentions,
@@ -14,15 +15,19 @@ import {
   type Compensation,
   type Language,
   type Listing,
-  type Category,
 } from "@/lib/data";
 import { copy } from "@/lib/i18n";
+import {
+  limits,
+  parseListingInput,
+  type ListingInput,
+} from "@/lib/listing-input";
 export default function PostForm({
   language,
-  onPost,
+  onPosted,
 }: {
   language: Language;
-  onPost: (listing: Listing) => void;
+  onPosted: (listing: Listing) => void;
 }) {
   const t = copy[language];
   const n = names[language];
@@ -31,71 +36,57 @@ export default function PostForm({
   const [compensation, setCompensation] = useState<Compensation>("free");
   const [days, setDays] = useState<number[]>([]);
   const [error, setError] = useState("");
+  const [busy, startTransition] = useTransition();
+  const messages = {
+    required: t.errorText,
+    length: t.errorLength,
+    days: t.errorDays,
+    date: t.errorDate,
+    time: t.errorTime,
+    amount: t.errorAmount,
+    invalid: t.errorInvalid,
+    auth: t.errorAuth,
+    unavailable: t.errorUnavailable,
+    failed: t.errorFailed,
+  };
   function submit(event: FormEvent<HTMLFormElement>) {
+    // Calling the action manually (not via the form action prop) keeps every
+    // typed value in place when saving fails.
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const value = (key: string) => String(data.get(key) ?? "").trim();
-    setError("");
-    if (
-      !value("title") ||
-      !value("description") ||
-      (intention === "exchange" && (!value("offer") || !value("wanted")))
-    ) {
-      setError(t.errorText);
-      return;
-    }
-    if (mode === "recurring" && days.length === 0) {
-      setError(t.errorDays);
-      return;
-    }
-    if (mode === "date" && value("date") <= berlinToday()) {
-      setError(t.errorDate);
-      return;
-    }
-    const start = value("start");
-    const end = value("end");
-    if (
-      mode !== "arrangement" &&
-      (!!start !== !!end || (start && end <= start))
-    ) {
-      setError(t.errorTime);
-      return;
-    }
-    const location = neighborhoods[Number(value("location"))];
-    const availability: Availability =
-      mode === "arrangement"
-        ? { mode }
-        : mode === "recurring"
-          ? { mode, days: [...days].sort(), start, end }
-          : {
-              mode,
-              date: value("date"),
-              start: start || undefined,
-              end: end || undefined,
-            };
-    onPost({
-      id: crypto.randomUUID(),
+    const data = new FormData(event.currentTarget);
+    const value = (key: string) => String(data.get(key) ?? "");
+    const input: ListingInput = {
       title: value("title"),
       description: value("description"),
       intention,
-      category: value("category") as Category,
-      lat: location.lat,
-      lng: location.lng,
-      neighborhood: location.name,
-      author: "You",
-      own: true,
-      availability,
+      category: value("category"),
+      neighborhood: value("location"),
+      mode,
+      date: value("date"),
+      start: value("start"),
+      end: value("end"),
+      days,
       compensation,
-      ...(compensation === "paid"
-        ? {
-            amount: Number(value("amount")),
-            unit: value("unit") as "hour" | "session",
-          }
-        : {}),
-      ...(intention === "exchange"
-        ? { offer: value("offer"), wanted: value("wanted") }
-        : {}),
+      amount: value("amount"),
+      unit: value("unit"),
+      offer: value("offer"),
+      wanted: value("wanted"),
+    };
+    setError("");
+    // Same checks as the server, for immediate feedback.
+    const local = parseListingInput(input, berlinToday());
+    if (!local.ok) {
+      setError(messages[local.error]);
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const result = await createListing(input);
+        if (result.ok) onPosted(result.listing);
+        else setError(messages[result.error]);
+      } catch {
+        setError(messages.failed);
+      }
     });
   }
   return (
@@ -131,7 +122,7 @@ export default function PostForm({
         <input
           name="title"
           required
-          maxLength={90}
+          maxLength={limits.title}
           placeholder={t.titlePlaceholder}
         />
       </label>
@@ -150,7 +141,7 @@ export default function PostForm({
         <textarea
           name="description"
           required
-          maxLength={1200}
+          maxLength={limits.description}
           rows={3}
           placeholder={t.descriptionPlaceholder}
         />
@@ -158,8 +149,8 @@ export default function PostForm({
       <label>
         {t.location}
         <select name="location">
-          {neighborhoods.map((location, index) => (
-            <option key={location.name} value={index}>
+          {neighborhoods.map((location) => (
+            <option key={location.name} value={location.name}>
               {location.name}
             </option>
           ))}
@@ -275,11 +266,21 @@ export default function PostForm({
         <>
           <label>
             {t.offer}
-            <textarea name="offer" required rows={2} maxLength={500} />
+            <textarea
+              name="offer"
+              required
+              rows={2}
+              maxLength={limits.exchange}
+            />
           </label>
           <label>
             {t.wanted}
-            <textarea name="wanted" required rows={2} maxLength={500} />
+            <textarea
+              name="wanted"
+              required
+              rows={2}
+              maxLength={limits.exchange}
+            />
           </label>
         </>
       )}
@@ -289,9 +290,9 @@ export default function PostForm({
         </p>
       )}
       <p className="preview-note">{t.previewNote}</p>
-      <button className="primary full" type="submit">
-        {t.create}
-        <ArrowUpRight size={18} />
+      <button className="primary full" type="submit" disabled={busy}>
+        {busy ? t.working : t.create}
+        {!busy && <ArrowUpRight size={18} />}
       </button>
     </form>
   );

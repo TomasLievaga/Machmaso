@@ -1,7 +1,13 @@
 "use client";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -14,6 +20,8 @@ import {
   Globe2,
   HeartHandshake,
   List,
+  LogIn,
+  LogOut,
   Map as MapIcon,
   MapPin,
   Plus,
@@ -33,7 +41,9 @@ import {
   type Language,
   type Listing,
 } from "@/lib/data";
+import { signOut } from "@/app/actions";
 import { copy } from "@/lib/i18n";
+import AuthForm from "./auth-form";
 import { ActionIcon } from "./icons";
 import Modal from "./modal";
 import PostForm from "./post-form";
@@ -46,25 +56,40 @@ const MapCanvas = dynamic(() => import("./map-canvas"), {
     </div>
   ),
 });
+type Notice = "posted" | "authConfirmed" | "authLinkError";
 export default function Discovery({
   initialListings,
   demoData = false,
+  authAvailable = false,
+  viewer = null,
+  authStatus = null,
 }: {
   initialListings: Listing[];
   demoData?: boolean;
+  authAvailable?: boolean;
+  viewer?: { name: string } | null;
+  authStatus?: "confirmed" | "error" | null;
 }) {
   const [language, setLanguage] = useState<Language>("en");
-  const [listings, setListings] = useState<Listing[]>(initialListings);
+  // Server-rendered; Server Actions revalidate the page after changes.
+  const listings = initialListings;
   const [query, setQuery] = useState("");
   const [intention, setIntention] = useState<Intention | "all">("all");
   const [category, setCategory] = useState<Category | "all">("all");
   const [view, setView] = useState<"map" | "list">("map");
   const [selected, setSelected] = useState<Listing | null>(null);
   const [dialog, setDialog] = useState<
-    "post" | "request" | "confirmation" | null
+    "auth" | "post" | "request" | "confirmation" | null
   >(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
-  const [notice, setNotice] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(
+    authStatus === "confirmed"
+      ? "authConfirmed"
+      : authStatus === "error"
+        ? "authLinkError"
+        : null,
+  );
+  const [signingOut, startSignOut] = useTransition();
   const [mapUnavailable, setMapUnavailable] = useState(false);
   const handleMapUnavailable = useCallback(() => {
     setMapUnavailable(true);
@@ -75,6 +100,13 @@ export default function Discovery({
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+  // Drop ?auth=… from the address bar once its notice is shown.
+  useEffect(() => {
+    if (!authStatus) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("auth");
+    window.history.replaceState(null, "", url);
+  }, [authStatus]);
   const filtered = useMemo(
     () =>
       listings.filter(
@@ -93,12 +125,14 @@ export default function Discovery({
     setIntention("all");
     setCategory("all");
   }
-  function post(listing: Listing) {
-    setListings((current) => [listing, ...current]);
+  function posted(listing: Listing) {
     clear();
     setDialog(null);
     setSelected(listing);
-    setNotice(true);
+    setNotice("posted");
+  }
+  function startPosting() {
+    setDialog(viewer ? "post" : "auth");
   }
   const activeFilters =
     intention !== "all" || category !== "all" || query !== "";
@@ -136,10 +170,33 @@ export default function Discovery({
               </button>
             ))}
           </div>
-          <button
-            className="primary post-button"
-            onClick={() => setDialog("post")}
-          >
+          {viewer ? (
+            <div className="account">
+              <span className="account-name">
+                <span className="sr-only">{t.signedInAs} </span>
+                {viewer.name}
+              </span>
+              <button
+                className="text-button"
+                disabled={signingOut}
+                onClick={() => startSignOut(async () => void (await signOut()))}
+              >
+                <LogOut size={14} />
+                <span>{t.signOut}</span>
+              </button>
+            </div>
+          ) : (
+            authAvailable && (
+              <button
+                className="text-button sign-in-button"
+                onClick={() => setDialog("auth")}
+              >
+                <LogIn size={14} />
+                <span>{t.signIn}</span>
+              </button>
+            )
+          )}
+          <button className="primary post-button" onClick={startPosting}>
             <Plus size={18} />
             <span>{t.post}</span>
           </button>
@@ -417,11 +474,11 @@ export default function Discovery({
       {notice && (
         <div className="toast" role="status">
           <Check size={17} />
-          {t.posted}
+          {t[notice]}
           <button
             className="icon-button"
             aria-label={t.close}
-            onClick={() => setNotice(false)}
+            onClick={() => setNotice(null)}
           >
             <X size={16} />
           </button>
@@ -488,7 +545,13 @@ export default function Discovery({
                   {t.by}{" "}
                   <strong>{selected.own ? t.yours : selected.author}</strong>
                 </span>
-                <small>{selected.own ? t.own : t.fictional}</small>
+                <small>
+                  {selected.own
+                    ? t.own
+                    : selected.fictional
+                      ? t.fictional
+                      : t.member}
+                </small>
               </div>
             </div>
             <button
@@ -521,7 +584,30 @@ export default function Discovery({
           onClose={() => setDialog(null)}
           kind="post-modal"
         >
-          <PostForm language={language} onPost={post} />
+          <PostForm language={language} onPosted={posted} />
+        </Modal>
+      )}
+      {dialog === "auth" && (
+        <Modal
+          title={t.authTitle}
+          closeLabel={t.close}
+          onClose={() => setDialog(null)}
+          kind="post-modal"
+        >
+          {authAvailable ? (
+            <AuthForm
+              language={language}
+              onSignedIn={() => setDialog("post")}
+            />
+          ) : (
+            <div className="confirmation">
+              <h2>{t.authTitle}</h2>
+              <p role="status">{t.authNeeded}</p>
+              <button className="primary full" onClick={() => setDialog(null)}>
+                {t.done}
+              </button>
+            </div>
+          )}
         </Modal>
       )}
       {dialog === "request" && selected && (

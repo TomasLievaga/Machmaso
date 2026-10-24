@@ -1,9 +1,11 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSamples, type Listing } from "./data";
-import { supabase } from "./supabase";
+import type { ListingDraft } from "./listing-input";
 
 // Row shape of public.listings (see supabase/migrations). Check constraints
 // in the database keep the text columns within the Listing union types.
-type ListingRow = {
+// author_id only exists once the listing-authors migration is applied.
+export type ListingRow = {
   id: string;
   title: string;
   description: string;
@@ -19,9 +21,10 @@ type ListingRow = {
   unit: Listing["unit"] | null;
   offer: string | null;
   wanted: string | null;
+  author_id?: string | null;
 };
 
-function fromRow(row: ListingRow): Listing {
+export function fromRow(row: ListingRow, viewerId?: string): Listing {
   return {
     id: row.id,
     title: row.title,
@@ -40,27 +43,55 @@ function fromRow(row: ListingRow): Listing {
     ...(row.offer !== null && row.wanted !== null
       ? { offer: row.offer, wanted: row.wanted }
       : {}),
+    ...(viewerId && row.author_id === viewerId ? { own: true } : {}),
+    ...(row.author_id ? {} : { fictional: true }),
+  };
+}
+
+export function toRow(
+  draft: ListingDraft,
+  authorId: string,
+  authorName: string,
+) {
+  return {
+    title: draft.title,
+    description: draft.description,
+    intention: draft.intention,
+    category: draft.category,
+    neighborhood: draft.neighborhood,
+    lat: draft.lat,
+    lng: draft.lng,
+    availability: draft.availability,
+    compensation: draft.compensation,
+    amount: draft.amount ?? null,
+    unit: draft.unit ?? null,
+    offer: draft.offer ?? null,
+    wanted: draft.wanted ?? null,
+    author_id: authorId,
+    author_name: authorName,
   };
 }
 
 export type ListingSource = "supabase" | "demo";
 
 // Loads listings from Supabase, or the built-in samples when Supabase is not
-// configured or the request fails.
-export async function loadListings(): Promise<{
-  listings: Listing[];
-  source: ListingSource;
-}> {
+// configured or the request fails. `select("*")` keeps reads working before
+// and after the author_id column exists.
+export async function loadListings(
+  supabase: SupabaseClient | null,
+  viewerId?: string,
+): Promise<{ listings: Listing[]; source: ListingSource }> {
   if (supabase) {
     const { data, error } = await supabase
       .from("listings")
-      .select(
-        "id, title, description, intention, category, neighborhood, lat, lng, author_name, availability, compensation, amount, unit, offer, wanted",
-      )
+      .select("*")
       .order("created_at", { ascending: false })
       .returns<ListingRow[]>();
     if (!error && data)
-      return { listings: data.map(fromRow), source: "supabase" };
+      return {
+        listings: data.map((row) => fromRow(row, viewerId)),
+        source: "supabase",
+      };
     console.error("Could not load listings from Supabase:", error?.message);
   }
   return { listings: createSamples(), source: "demo" };

@@ -40,6 +40,8 @@ export type Listing = {
   offer?: string;
   wanted?: string;
   own?: boolean;
+  // Sample listings that do not belong to a real account.
+  fictional?: boolean;
 };
 export const neighborhoods = [
   { name: "Maxvorstadt", lat: 48.1508, lng: 11.5706 },
@@ -311,6 +313,7 @@ export function createSamples(): Listing[] {
       lat: neighborhoods[index].lat + (i > 7 ? 0.003 : 0),
       lng: neighborhoods[index].lng + (i > 7 ? -0.004 : 0),
       author,
+      fictional: true,
       compensation,
       availability:
         i % 3 === 0

@@ -7,7 +7,7 @@ Machmaso is a shared project developed by Agamir and Tomas on separate computers
 The current monochrome prototype uses Next.js App Router, TypeScript, Tailwind
 CSS, Leaflet with OpenStreetMap tiles, marker clustering, Lucide icons, and EN/DE
 controls. Listings are read server-side from Supabase, with built-in fictional
-samples as a fallback. It is a prototype,
+samples as a fallback; signed-in users can post actions. It is a prototype,
 not a final application architecture or product specification. The original
 `hello.py` and `test_hello.py` remain unchanged as a historical test scaffold.
 
@@ -25,41 +25,82 @@ npm run dev
 Open http://127.0.0.1:3000. The development server binds to the local computer
 only. Each collaborator runs their own preview from their own checkout.
 
-### Supabase (listings, read-only)
+### Supabase (listings and accounts)
 
 Listings are loaded server-side from the `listings` table of the Supabase
-project "Machmalso". Put the project URL and publishable key (Supabase →
-Project Settings → API Keys) into `.env.local`:
+project "Machmalso". Anyone can browse. Visitors who want to post an action are
+asked to sign in or create an account (email and password); the listing is then
+inserted server-side with the signed-in user's session. The author is always
+taken from the verified session, never from the browser. No service-role key is
+used anywhere.
 
-```sh
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-```
+#### Environment variables
 
-The publishable key is designed to be public, but `.env.local` stays out of git
-(`.env*` is ignored; only `.env.example` is committed). Restart `npm run dev`
-after changing it. Without these values, or if the request fails, the app falls
-back to the built-in samples from `createSamples()` and shows a "demo data"
-notice.
+| Name                                   | Where                                | Purpose                                                       |
+| -------------------------------------- | ------------------------------------ | ------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | `.env.local`, Vercel                 | Project URL (Project Settings → API)                          |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `.env.local`, Vercel                 | Publishable key (Project Settings → API Keys)                 |
+| `NEXT_PUBLIC_SITE_URL`                 | Vercel Production (optional locally) | Base URL for confirmation links, e.g. `https://<your-domain>` |
 
-- Schema: `supabase/migrations/20261024161215_create_listings.sql` creates the
-  table with check constraints matching `lib/data.ts` and enables Row Level
-  Security with a single policy that lets anyone `SELECT`. There are no insert,
-  update or delete policies yet, because there is no login.
-- Sample data: `supabase/seed.sql` inserts the 16 fictional listings (fixed
-  dates in June 2027, recurring or "by arrangement" otherwise). It is safe to
-  re-run. To set up a fresh project, paste the migration and then the seed into
-  the Supabase SQL editor.
-- Posting an action and sending a request stay local-only (React memory) until
-  authentication exists. Nothing is written to Supabase.
+Copy `.env.example` to `.env.local` for local development. The publishable
+key is designed to be public, but `.env.local` stays out of git (`.env*` is
+ignored; only `.env.example` is committed). `NEXT_PUBLIC_*` values are inlined
+at build time: restart `npm run dev` locally, and redeploy on Vercel after
+changing them. Without `NEXT_PUBLIC_SITE_URL`, confirmation links use the
+origin of the page where someone signed up (useful for Vercel previews).
+
+Without the Supabase values, or if the request fails, the app falls back to the
+built-in samples from `createSamples()` with a "demo data" notice, and posting
+is disabled.
+
+#### Supabase Auth settings (dashboard)
+
+- **Authentication → Sign In / Providers → Email**: enabled, with **Confirm
+  email** left on. Leave other providers off.
+- **Authentication → URL Configuration**:
+  - Site URL: the production URL (e.g. `https://<your-domain>`).
+  - Redirect URLs: `http://127.0.0.1:3000/auth/confirm`,
+    `http://localhost:3000/auth/confirm`, `https://<your-domain>/auth/confirm`,
+    and for Vercel previews `https://*-<team-slug>.vercel.app/auth/confirm`.
+- **Authentication → Emails → Confirm signup** (recommended): set the link to
+  `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}`.
+  This works even when the link is opened in another browser. The default
+  template also works (`/auth/confirm` handles its `?code=` link), but only in
+  the browser where the account was created.
+- Supabase's built-in email service is heavily rate-limited and meant for
+  testing. Configure custom SMTP before inviting real users.
+
+`/auth/confirm` only redirects to paths on this site; any other `next` value
+falls back to `/`.
+
+#### Database
+
+- `supabase/migrations/20261024161215_create_listings.sql` (applied) creates
+  the table with check constraints matching `lib/data.ts` and Row Level
+  Security with a single policy that lets anyone `SELECT`.
+- `supabase/migrations/20261024180000_add_listing_authors.sql` (**not applied
+  yet**) adds a nullable `author_id` referencing `auth.users`, reduces table
+  privileges to `SELECT` for everyone plus column-limited `INSERT` for
+  signed-in users, and adds a policy that only allows inserting listings whose
+  `author_id` is the inserting user. Until it is applied, browsing works and
+  posting shows a "not available yet" message.
+- `supabase/seed.sql` inserts the 16 fictional listings (no author, fixed dates
+  in June 2027). It is safe to re-run. To set up a fresh project, run the
+  migrations in order and then the seed in the Supabase SQL editor.
+- Sending a request stays a local demo (React memory). There is no editing or
+  deleting of listings yet.
 
 ### Checks and production preview
 
 ```sh
 npm run lint
 npm run typecheck
+npm test
 npm run build
 ```
+
+`npm test` runs the Vitest unit tests for listing validation, ownership
+mapping, auth input, and the confirmation redirect guard.
 
 To preview the production build, stop the development server, then run:
 
@@ -80,8 +121,9 @@ after pulling dependency changes.
 - Select a marker or card to open a desktop side panel or mobile bottom sheet.
 - Send a demo request with an optional introduction. A pending state appears;
   no real message is delivered and chat is not implemented.
-- Post an action using a neighborhood, availability, compensation, and (for
-  exchanges) separate offer/return fields. It appears immediately in this session.
+- Post an action after signing in, using a neighborhood, availability,
+  compensation, and (for exchanges) separate offer/return fields. It is saved to
+  Supabase and appears for everyone once the listing-authors migration is applied.
 - Toggle EN/DE for interface labels. Fictional listing text stays in English.
 
 ### Dates, location, and demo limitations
@@ -95,9 +137,9 @@ after pulling dependency changes.
   and a valid start/end range. Overnight ranges are not supported in this draft.
 - Locations are approximate neighborhood points; no exact home address is asked
   for. The map does not request device geolocation.
-- Listings are read from Supabase; newly posted actions and pending requests are
-  held only in React memory, and refreshing resets them. There is no
-  authentication, write access to the database, payment processing, real
+- Listings are read from Supabase and signed-in users can create them. Pending
+  requests are held only in React memory, and refreshing resets them. There is
+  no listing editing, profile editing, social login, payment processing, real
   messaging, or acceptance flow. Deployment does not turn these demo flows into
   persistent services.
 - OpenStreetMap tiles require internet access and retain visible attribution.
