@@ -16,12 +16,40 @@ From the repository root:
 
 ```sh
 npm ci
+cp .env.example .env.local   # then fill in the Supabase values
 npm run dev
 ```
 
-Open http://127.0.0.1:3000. No API keys or environment variables are needed.
-The development server binds to the local computer only. Each collaborator runs
-their own preview from their own checkout.
+Open http://127.0.0.1:3000. The development server binds to the local computer
+only. Each collaborator runs their own preview from their own checkout.
+
+### Supabase (listings, read-only)
+
+Listings are loaded server-side from the `listings` table of the Supabase
+project "Machmalso". Put the project URL and publishable key (Supabase →
+Project Settings → API Keys) into `.env.local`:
+
+```sh
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+The publishable key is designed to be public, but `.env.local` stays out of git
+(`.env*` is ignored; only `.env.example` is committed). Restart `npm run dev`
+after changing it. Without these values, or if the request fails, the app falls
+back to the built-in samples from `createSamples()` and shows a "demo data"
+notice.
+
+- Schema: `supabase/migrations/20261024120000_create_listings.sql` creates the
+  table with check constraints matching `lib/data.ts` and enables Row Level
+  Security with a single policy that lets anyone `SELECT`. There are no insert,
+  update or delete policies yet, because there is no login.
+- Sample data: `supabase/seed.sql` inserts the 16 fictional listings (fixed
+  dates in June 2027, recurring or "by arrangement" otherwise). It is safe to
+  re-run. To set up a fresh project, paste the migration and then the seed into
+  the Supabase SQL editor.
+- Posting an action and sending a request stay local-only (React memory) until
+  authentication exists. Nothing is written to Supabase.
 
 ### Checks and production preview
 
@@ -57,15 +85,17 @@ after pulling dependency changes.
 ### Dates, location, and demo limitations
 
 - Date-only values use `YYYY-MM-DD` strings, formatted without local timezone
-  conversion. Sample dates are generated after the current Berlin calendar date
-  on each page load. Time ranges are wall-clock times in `Europe/Berlin`;
+  conversion. Seeded Supabase listings use fixed dates; the built-in fallback
+  samples generate dates after the current Berlin calendar date on each page
+  load. Time ranges are wall-clock times in `Europe/Berlin`;
   recurring schedules preserve local time across daylight-saving changes.
 - Specific dates may omit a time range. Recurring schedules require weekdays
   and a valid start/end range. Overnight ranges are not supported in this draft.
 - Locations are approximate neighborhood points; no exact home address is asked
   for. The map does not request device geolocation.
-- Listings and pending requests are held only in React memory. Refreshing resets
-  them. There is no backend storage, authentication, payment processing, real
+- Listings are read from Supabase; newly posted actions and pending requests are
+  held only in React memory, and refreshing resets them. There is no
+  authentication, write access to the database, payment processing, real
   messaging, acceptance flow, or production deployment.
 - OpenStreetMap tiles require internet access and retain visible attribution.
   If tile loading fails, the app switches to the results list with an explanatory

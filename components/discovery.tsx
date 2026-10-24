@@ -48,8 +48,10 @@ const MapCanvas = dynamic(() => import("./map-canvas"), {
 });
 export default function Discovery({
   initialListings,
+  demoData = false,
 }: {
   initialListings: Listing[];
+  demoData?: boolean;
 }) {
   const [language, setLanguage] = useState<Language>("en");
   const [listings, setListings] = useState<Listing[]>(initialListings);
@@ -290,6 +292,11 @@ export default function Discovery({
               </button>
             </div>
           </div>
+          {demoData && (
+            <p className="fallback-notice" role="status">
+              {t.demoData}
+            </p>
+          )}
           {mapUnavailable && (
             <p className="fallback-notice" role="status">
               {t.mapError}

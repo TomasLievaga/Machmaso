@@ -25,6 +25,8 @@ export const copy = {
     mapLoading: "Finding our way around Munich…",
     mapError:
       "Map tiles are unavailable. You can still explore every action in the list.",
+    demoData:
+      "Demo data: the listings database is not connected, so built-in sample actions are shown.",
     noResults: "A little quiet here.",
     noResultsText:
       "Try another search or clear your filters to find something nearby.",
@@ -119,6 +121,8 @@ export const copy = {
     mapLoading: "Wir sehen uns in München um…",
     mapError:
       "Kartenkacheln sind nicht verfügbar. Alle Aktionen findest du weiterhin in der Liste.",
+    demoData:
+      "Demodaten: Die Datenbank ist nicht verbunden, daher werden eingebaute Beispielaktionen angezeigt.",
     noResults: "Hier ist es gerade ruhig.",
     noResultsText: "Versuche eine andere Suche oder setze die Filter zurück.",
     availability: "Verfügbarkeit",

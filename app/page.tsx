@@ -1,8 +1,9 @@
 import Discovery from "@/components/discovery";
-import { createSamples } from "@/lib/data";
+import { loadListings } from "@/lib/listings";
 
-// Generate future dates per page load and share the same data during hydration.
+// Load listings per request; demo fallback dates are also generated per load.
 export const dynamic = "force-dynamic";
-export default function Home() {
-  return <Discovery initialListings={createSamples()} />;
+export default async function Home() {
+  const { listings, source } = await loadListings();
+  return <Discovery initialListings={listings} demoData={source === "demo"} />;
 }
