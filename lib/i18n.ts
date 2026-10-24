@@ -7,7 +7,7 @@ export const copy = {
     demoNote:
       "Interactive demo · Fictional people & actions · Resets on refresh",
     eyebrow: "LESS SCROLLING. MORE DOING.",
-    headline: "Good things start",
+    headline: "Bro, Good things start",
     headlineAccent: "around the corner.",
     subtitle:
       "Find a tennis partner. Share a skill. Lend a hand. Your neighborhood is full of possibilities.",
