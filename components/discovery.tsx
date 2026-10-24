@@ -162,7 +162,7 @@ export default function Discovery({
               <path
                 d="M35 135C-20 45 145 0 232 55S235 180 130 169 72 50 160 41"
                 fill="none"
-                stroke="#c8cabc"
+                stroke="currentColor"
                 strokeWidth="1.5"
                 strokeDasharray="5 6"
               />
