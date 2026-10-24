@@ -1,3 +1,12 @@
 __pycache__/
 *.pyc
 .venv/
+
+# Web development and local secrets
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+.env*
+!.env.example
